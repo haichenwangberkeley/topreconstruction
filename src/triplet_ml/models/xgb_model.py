@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -49,6 +49,7 @@ class XGBTripletModel:
         sample_weight: Optional[np.ndarray] = None,
         eval_set: Optional[Tuple[Any, Any]] = None,
         eval_sample_weight: Optional[np.ndarray] = None,
+        iteration_callback: Optional[Callable[[int], None]] = None,
     ) -> Dict[str, Any]:
         try:
             import xgboost as xgb
@@ -76,6 +77,17 @@ class XGBTripletModel:
             )
             evals.append((deval, "val"))
 
+        callbacks = []
+        if iteration_callback is not None:
+            callback_fn = iteration_callback
+
+            class _IterationCallback(xgb.callback.TrainingCallback):
+                def after_iteration(self, model, epoch: int, evals_log) -> bool:  # type: ignore[override]
+                    callback_fn(int(epoch) + 1)
+                    return False
+
+            callbacks.append(_IterationCallback())
+
         self.evals_result = {}
         self.booster = xgb.train(
             params=self.params,
@@ -85,6 +97,7 @@ class XGBTripletModel:
             evals_result=self.evals_result,
             early_stopping_rounds=self.early_stopping_rounds,
             verbose_eval=False,
+            callbacks=callbacks,
         )
 
         self.best_iteration = int(getattr(self.booster, "best_iteration", self.num_boost_round - 1))

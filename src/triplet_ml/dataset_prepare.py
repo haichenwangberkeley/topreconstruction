@@ -12,6 +12,7 @@ import numpy as np
 
 from . import features
 from . import plotting
+from . import progress as prog
 from . import triplet_io as pio
 
 
@@ -170,6 +171,7 @@ def run(args: argparse.Namespace) -> None:
         raise ValueError("train_frac + val_frac must be < 1")
     if args.max_bg_per_event is not None and args.max_bg_per_event <= 0:
         raise ValueError("--max-bg-per-event must be > 0 when provided")
+    show_progress = prog.should_show_progress(args.no_progress)
 
     output_dir = pio.ensure_dir(args.output_dir)
     train_path = output_dir / "train.parquet"
@@ -193,6 +195,18 @@ def run(args: argparse.Namespace) -> None:
     }
 
     dataset = ds.dataset(args.input, format="parquet")
+    total_rows_estimate: Optional[int] = None
+    if show_progress:
+        try:
+            total_rows_estimate = int(dataset.count_rows())
+        except Exception:
+            total_rows_estimate = None
+    progress_bar = prog.ProgressBar(
+        desc="dataset_prepare rows",
+        total=total_rows_estimate,
+        unit="rows",
+        enabled=show_progress,
+    )
     scanner = dataset.scanner(columns=ordered_columns, batch_size=args.batch_size)
 
     current: Optional[EventBuffer] = None
@@ -235,30 +249,34 @@ def run(args: argparse.Namespace) -> None:
         if len(deterministic_check_events) < 50:
             deterministic_check_events.append(buffer.event_id)
 
-    for batch in scanner.to_batches():
-        batch_dict = batch.to_pydict()
-        n_rows = len(batch_dict["event_id"])
-        total_input_rows += n_rows
+    try:
+        for batch in scanner.to_batches():
+            batch_dict = batch.to_pydict()
+            n_rows = len(batch_dict["event_id"])
+            total_input_rows += n_rows
+            progress_bar.update(n_rows)
 
-        for row_idx in range(n_rows):
-            event_id = int(batch_dict["event_id"][row_idx])
+            for row_idx in range(n_rows):
+                event_id = int(batch_dict["event_id"][row_idx])
 
-            if current is None:
-                current = _new_event_buffer(event_id, ordered_columns)
-            elif event_id != current.event_id:
-                flush_event(current)
-                closed_events.add(current.event_id)
-                if event_id in closed_events:
-                    raise RuntimeError(
-                        "Input parquet rows are not grouped by event_id; event-level balancing requires grouped events."
-                    )
-                current = _new_event_buffer(event_id, ordered_columns)
+                if current is None:
+                    current = _new_event_buffer(event_id, ordered_columns)
+                elif event_id != current.event_id:
+                    flush_event(current)
+                    closed_events.add(current.event_id)
+                    if event_id in closed_events:
+                        raise RuntimeError(
+                            "Input parquet rows are not grouped by event_id; event-level balancing requires grouped events."
+                        )
+                    current = _new_event_buffer(event_id, ordered_columns)
 
-            row_values = {name: batch_dict[name][row_idx] for name in ordered_columns}
-            _append_row(current, row_values)
+                row_values = {name: batch_dict[name][row_idx] for name in ordered_columns}
+                _append_row(current, row_values)
 
-    if current is not None:
-        flush_event(current)
+        if current is not None:
+            flush_event(current)
+    finally:
+        progress_bar.close()
 
     for writer in writers.values():
         writer.close()
@@ -312,6 +330,7 @@ def run(args: argparse.Namespace) -> None:
             "batch_size": args.batch_size,
             "plot_root": args.plot_root,
             "skip_plots": args.skip_plots,
+            "no_progress": args.no_progress,
         },
         seed=args.seed,
     )
@@ -328,5 +347,6 @@ def register_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     parser.add_argument("--row-group-size", type=int, default=50_000, help="Output parquet row group size")
     parser.add_argument("--plot-root", default="plots", help="Root directory for generated validation plots")
     parser.add_argument("--skip-plots", action="store_true", help="Skip automatic feature/observable validation plotting")
+    parser.add_argument("--no-progress", action="store_true", help="Disable live progress output")
     parser.add_argument("--seed", type=int, default=42, help="Deterministic split/balancing seed")
     parser.set_defaults(func=run)

@@ -10,7 +10,9 @@ PREP_DIR := $(ARTIFACT_ROOT)/dataset_prepare
 TRAIN_DIR := $(ARTIFACT_ROOT)/train
 INFER_DIR := $(ARTIFACT_ROOT)/infer
 
+XGB_CONFIG ?= configs/xgb_hyperparameters.json
 PLOT_FLAGS ?= --skip-plots
+PROGRESS_FLAGS ?=
 
 .PHONY: help install dirs dataset_build dataset_prepare train_xgb train_tabpfn infer_xgb infer_tabpfn pipeline_xgb pipeline_tabpfn
 
@@ -30,7 +32,9 @@ help:
 	@echo "  MAX_EVENTS=$(MAX_EVENTS)"
 	@echo "  SEED=$(SEED)"
 	@echo "  ARTIFACT_ROOT=$(ARTIFACT_ROOT)"
+	@echo "  XGB_CONFIG=$(XGB_CONFIG)"
 	@echo "  PLOT_FLAGS='$(PLOT_FLAGS)'"
+	@echo "  PROGRESS_FLAGS='$(PROGRESS_FLAGS)'"
 
 install:
 	$(PYTHON) -m pip install -e .
@@ -43,6 +47,7 @@ dataset_build: dirs
 	  --inputs $(ROOT_INPUT) \
 	  --output-dir $(BUILD_DIR) \
 	  --max-events $(MAX_EVENTS) \
+	  $(PROGRESS_FLAGS) \
 	  --seed $(SEED)
 
 dataset_prepare: dataset_build
@@ -50,17 +55,19 @@ dataset_prepare: dataset_build
 	  --input $(BUILD_DIR)/triplets_raw.parquet \
 	  --output-dir $(PREP_DIR) \
 	  $(PLOT_FLAGS) \
+	  $(PROGRESS_FLAGS) \
 	  --seed $(SEED)
 
 train_xgb: dataset_prepare
 	$(PYTHON) -m triplet_ml train \
 	  --model xgb \
+	  --xgb-config $(XGB_CONFIG) \
 	  --train $(PREP_DIR)/train.parquet \
 	  --val $(PREP_DIR)/val.parquet \
 	  --test $(PREP_DIR)/test.parquet \
 	  --output-dir $(TRAIN_DIR) \
-	  --use-sample-weights \
 	  $(PLOT_FLAGS) \
+	  $(PROGRESS_FLAGS) \
 	  --seed $(SEED)
 
 train_tabpfn: dataset_prepare
@@ -72,6 +79,7 @@ train_tabpfn: dataset_prepare
 	  --output-dir $(TRAIN_DIR) \
 	  --max-training-samples 10000 \
 	  $(PLOT_FLAGS) \
+	  $(PROGRESS_FLAGS) \
 	  --seed $(SEED)
 
 infer_xgb: train_xgb
@@ -81,6 +89,7 @@ infer_xgb: train_xgb
 	  --train-output-dir $(TRAIN_DIR) \
 	  --output-dir $(INFER_DIR) \
 	  $(PLOT_FLAGS) \
+	  $(PROGRESS_FLAGS) \
 	  --seed $(SEED)
 
 infer_tabpfn: train_tabpfn
@@ -90,6 +99,7 @@ infer_tabpfn: train_tabpfn
 	  --train-output-dir $(TRAIN_DIR) \
 	  --output-dir $(INFER_DIR) \
 	  $(PLOT_FLAGS) \
+	  $(PROGRESS_FLAGS) \
 	  --seed $(SEED)
 
 pipeline_xgb: infer_xgb

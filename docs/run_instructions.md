@@ -18,6 +18,12 @@ Set an input ROOT file:
 export ROOT_INPUT=data/input.root
 ```
 
+The default XGBoost hyperparameter config is:
+
+```bash
+export XGB_CONFIG=configs/xgb_hyperparameters.json
+```
+
 ## 1. Recommended (Makefile) Workflow
 
 Run the full pipeline with one command:
@@ -72,11 +78,28 @@ Stage 3 (XGBoost):
 ```bash
 python -m triplet_ml train \
   --model xgb \
+  --xgb-config "$XGB_CONFIG" \
   --train artifacts/run_40000/dataset_prepare/train.parquet \
   --val artifacts/run_40000/dataset_prepare/val.parquet \
   --test artifacts/run_40000/dataset_prepare/test.parquet \
   --output-dir artifacts/run_40000/train \
+  --skip-plots \
+  --seed 42
+```
+
+CLI overrides still work when explicitly set, for example:
+
+```bash
+python -m triplet_ml train \
+  --model xgb \
+  --xgb-config "$XGB_CONFIG" \
+  --eta 0.03 \
+  --max-depth 8 \
   --use-sample-weights \
+  --train artifacts/run_40000/dataset_prepare/train.parquet \
+  --val artifacts/run_40000/dataset_prepare/val.parquet \
+  --test artifacts/run_40000/dataset_prepare/test.parquet \
+  --output-dir artifacts/run_40000/train \
   --skip-plots \
   --seed 42
 ```
@@ -93,7 +116,12 @@ OMP_NUM_THREADS=8 python -m triplet_ml infer \
   --seed 42
 ```
 
-## 3. Quick Verification
+## 3. Progress Output
+
+- By default, stages show live progress in interactive terminals.
+- To disable progress (batch/log mode), add `--no-progress` to `dataset_build`, `dataset_prepare`, `train`, and `infer`.
+
+## 4. Quick Verification
 
 ```bash
 python -c "import json; print(json.load(open('artifacts/run_40000/dataset_build/dataset_build_report.json')))"
@@ -102,6 +130,6 @@ python -c "import json; d=json.load(open('artifacts/run_40000/train/training_rep
 python -c "import json; print(json.load(open('artifacts/run_40000/infer/inference_report.json')))"
 ```
 
-## 4. Scope Note
+## 5. Scope Note
 
 TypePFN is not implemented in this repository. Supported backends are `xgb` and `tabpfn`.

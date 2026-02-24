@@ -66,6 +66,7 @@ python -m triplet_ml dataset_prepare \
 # BDT (XGBoost)
 python -m triplet_ml train \
   --model xgb \
+  --xgb-config configs/xgb_hyperparameters.json \
   --train artifacts/dataset_prepare/train.parquet \
   --val artifacts/dataset_prepare/val.parquet \
   --test artifacts/dataset_prepare/test.parquet \
@@ -81,6 +82,8 @@ python -m triplet_ml train \
   --max-training-samples 10000
 ```
 
+For XGBoost, explicit CLI hyperparameter flags (for example `--eta`, `--max-depth`) override values from `--xgb-config`.
+
 ## Inference
 
 ```bash
@@ -94,4 +97,5 @@ python -m triplet_ml infer \
 ## Notes
 
 - For a minimal/non-plot workflow, pass `--skip-plots` in `dataset_prepare`, `train`, and `infer`.
+- Live progress is shown on interactive terminals; disable with `--no-progress`.
 - TypePFN is not implemented in the current codebase; only `xgb` and `tabpfn` backends exist.

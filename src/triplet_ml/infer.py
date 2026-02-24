@@ -12,6 +12,7 @@ import numpy as np
 
 from . import features
 from . import plotting
+from . import progress as prog
 from . import triplet_io as pio
 from .models import (
     MODEL_BACKENDS,
@@ -47,6 +48,7 @@ def run(args: argparse.Namespace) -> None:
         test_dataset=args.test,
     )
     model_backend = normalize_model_backend(model_backend)
+    show_progress = prog.should_show_progress(args.no_progress)
 
     output_dir = pio.ensure_dir(args.output_dir)
     output_path = (
@@ -72,30 +74,50 @@ def run(args: argparse.Namespace) -> None:
     )
 
     dataset = ds.dataset(args.test, format="parquet")
+    total_rows_estimate = None
+    if show_progress:
+        try:
+            total_rows_estimate = int(dataset.count_rows())
+        except Exception:
+            total_rows_estimate = None
+    progress_bar = prog.ProgressBar(
+        desc="inference rows",
+        total=total_rows_estimate,
+        unit="rows",
+        enabled=show_progress,
+    )
     scanner = dataset.scanner(columns=input_columns, batch_size=args.batch_size)
 
     n_input = 0
     n_output = 0
     prediction_time_seconds = 0.0
 
-    for batch in scanner.to_batches():
-        payload = batch.to_pydict()
-        n_rows = len(payload["event_id"])
-        if n_rows == 0:
-            continue
+    try:
+        for batch in scanner.to_batches():
+            payload = batch.to_pydict()
+            n_rows = len(payload["event_id"])
+            if n_rows == 0:
+                continue
 
-        feature_matrix = np.column_stack([np.asarray(payload[col], dtype=np.float32) for col in features.FEATURE_COLUMNS])
-        features.assert_feature_batch_sane({name: feature_matrix[:, i] for i, name in enumerate(features.FEATURE_COLUMNS)})
+            feature_matrix = np.column_stack(
+                [np.asarray(payload[col], dtype=np.float32) for col in features.FEATURE_COLUMNS]
+            )
+            features.assert_feature_batch_sane(
+                {name: feature_matrix[:, i] for i, name in enumerate(features.FEATURE_COLUMNS)}
+            )
 
-        pred_start = time.perf_counter()
-        scores = model.predict_proba(feature_matrix)[:, 1].astype(np.float32)
-        prediction_time_seconds += time.perf_counter() - pred_start
+            pred_start = time.perf_counter()
+            scores = model.predict_proba(feature_matrix)[:, 1].astype(np.float32)
+            prediction_time_seconds += time.perf_counter() - pred_start
 
-        payload[score_column] = scores.tolist()
-        writer.write_rows(payload)
+            payload[score_column] = scores.tolist()
+            writer.write_rows(payload)
 
-        n_input += n_rows
-        n_output += len(scores)
+            n_input += n_rows
+            n_output += len(scores)
+            progress_bar.update(n_rows)
+    finally:
+        progress_bar.close()
 
     writer.close()
 
@@ -148,6 +170,7 @@ def run(args: argparse.Namespace) -> None:
             "plot_root": args.plot_root,
             "skip_plots": args.skip_plots,
             "train_output_dir": args.train_output_dir,
+            "no_progress": args.no_progress,
         },
         seed=args.seed,
     )
@@ -181,5 +204,6 @@ def register_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     parser.add_argument("--row-group-size", type=int, default=50_000, help="Parquet row group size")
     parser.add_argument("--plot-root", default="plots", help="Root directory for generated inference plots")
     parser.add_argument("--skip-plots", action="store_true", help="Skip automatic inference plotting")
+    parser.add_argument("--no-progress", action="store_true", help="Disable live progress output")
     parser.add_argument("--seed", type=int, default=42, help="Seed stored in config snapshot")
     parser.set_defaults(func=run)

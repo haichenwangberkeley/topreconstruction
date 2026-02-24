@@ -14,6 +14,7 @@ import numpy as np
 import uproot
 
 from . import features
+from . import progress as prog
 from . import triplet_io as pio
 
 
@@ -64,6 +65,14 @@ def _flush_buffer(writer: pio.StreamingParquetWriter, buffer: pio.ColumnBuffer) 
     writer.write_rows(payload)
 
 
+def _estimate_total_events(tree_paths: Sequence[str]) -> int:
+    total = 0
+    for tree_path in tree_paths:
+        with uproot.open(tree_path) as tree:
+            total += int(tree.num_entries)
+    return total
+
+
 def run(args: argparse.Namespace) -> None:
     if args.max_events is not None and args.max_events <= 0:
         raise ValueError("--max-events must be > 0 when provided")
@@ -74,6 +83,7 @@ def run(args: argparse.Namespace) -> None:
     output_path = Path(args.output_file) if args.output_file else output_dir / "triplets_raw.parquet"
 
     tree_paths = pio.make_tree_paths(args.inputs, args.tree_name)
+    show_progress = prog.should_show_progress(args.no_progress)
 
     with uproot.open(tree_paths[0]) as tree:
         available_branches = set(tree.keys())
@@ -101,83 +111,101 @@ def run(args: argparse.Namespace) -> None:
     unordered_truth_examples = 0
     fallback_event_id = 0
     stop = False
+    total_events: Optional[int] = None
+    if show_progress:
+        try:
+            total_events = _estimate_total_events(tree_paths)
+        except Exception:
+            total_events = None
+    if total_events is not None and args.max_events is not None:
+        total_events = min(total_events, int(args.max_events))
+    progress_bar = prog.ProgressBar(
+        desc="dataset_build events",
+        total=total_events,
+        unit="events",
+        enabled=show_progress,
+    )
 
-    for chunk in uproot.iterate(tree_paths, branches, step_size=args.step_size, library="ak"):
-        n_chunk_events = len(chunk["N_genjet"])
-        for local_idx in range(n_chunk_events):
-            if args.max_events is not None and processed_events >= args.max_events:
-                stop = True
+    try:
+        for chunk in uproot.iterate(tree_paths, branches, step_size=args.step_size, library="ak"):
+            n_chunk_events = len(chunk["N_genjet"])
+            for local_idx in range(n_chunk_events):
+                if args.max_events is not None and processed_events >= args.max_events:
+                    stop = True
+                    break
+
+                n_genjet = int(chunk["N_genjet"][local_idx])
+                if use_event_branch is not None:
+                    event_id = _event_id_from_branch(chunk[use_event_branch][local_idx])
+                else:
+                    event_id = fallback_event_id
+                    fallback_event_id += 1
+
+                genjet_pt = np.asarray(ak.to_numpy(chunk["genjet_pt"][local_idx]), dtype=np.float64)[:n_genjet]
+                genjet_eta = np.asarray(ak.to_numpy(chunk["genjet_eta"][local_idx]), dtype=np.float64)[:n_genjet]
+                genjet_phi = np.asarray(ak.to_numpy(chunk["genjet_phi"][local_idx]), dtype=np.float64)[:n_genjet]
+
+                truth_set: Set[Tuple[int, int, int]] = set()
+                for truth_branch in TRUTH_BRANCHES:
+                    parsed = _parse_triplet(chunk[truth_branch][local_idx])
+                    if parsed is None:
+                        continue
+                    if len(set(parsed)) != 3:
+                        continue
+                    if min(parsed) < 0 or max(parsed) >= n_genjet:
+                        continue
+                    sorted_triplet = tuple(sorted(parsed))
+                    if parsed != sorted_triplet:
+                        unordered_truth_examples += 1
+                    truth_set.add(sorted_triplet)
+                    truth_triplets_total += 1
+
+                expected = math.comb(n_genjet, 3) if n_genjet >= 3 else 0
+                produced = 0
+
+                for i, j, k in itertools.combinations(range(n_genjet), 3):
+                    produced += 1
+                    payload = features.compute_triplet_feature_payload(genjet_pt, genjet_eta, genjet_phi, i, j, k)
+                    features.assert_feature_values_sane([payload[name] for name in features.FEATURE_COLUMNS])
+
+                    row = {
+                        "event_id": int(event_id),
+                        "i": int(i),
+                        "j": int(j),
+                        "k": int(k),
+                        "dr_ab": float(payload["dr_ab"]),
+                        "dr_ac": float(payload["dr_ac"]),
+                        "dr_bc": float(payload["dr_bc"]),
+                        "mij_over_m123_ab": float(payload["mij_over_m123_ab"]),
+                        "mij_over_m123_ac": float(payload["mij_over_m123_ac"]),
+                        "mij_over_m123_bc": float(payload["mij_over_m123_bc"]),
+                        "m123": float(payload["m123"]),
+                        "mij_ab": float(payload["mij_ab"]),
+                        "mij_ac": float(payload["mij_ac"]),
+                        "mij_bc": float(payload["mij_bc"]),
+                        "triplet_pt": float(payload["triplet_pt"]),
+                        "triplet_eta": float(payload["triplet_eta"]),
+                        "triplet_phi": float(payload["triplet_phi"]),
+                        "is_truth": int((i, j, k) in truth_set),
+                    }
+                    buffer.append_row(row)
+                    processed_candidates += 1
+
+                    if buffer.size >= args.flush_rows:
+                        _flush_buffer(writer, buffer)
+
+                if produced != expected:
+                    raise RuntimeError(
+                        f"Candidate enumeration mismatch for event_id={event_id}: produced={produced}, expected={expected}"
+                    )
+
+                processed_events += 1
+                progress_bar.update(1)
+
+            if stop:
                 break
-
-            n_genjet = int(chunk["N_genjet"][local_idx])
-            if use_event_branch is not None:
-                event_id = _event_id_from_branch(chunk[use_event_branch][local_idx])
-            else:
-                event_id = fallback_event_id
-                fallback_event_id += 1
-
-            genjet_pt = np.asarray(ak.to_numpy(chunk["genjet_pt"][local_idx]), dtype=np.float64)[:n_genjet]
-            genjet_eta = np.asarray(ak.to_numpy(chunk["genjet_eta"][local_idx]), dtype=np.float64)[:n_genjet]
-            genjet_phi = np.asarray(ak.to_numpy(chunk["genjet_phi"][local_idx]), dtype=np.float64)[:n_genjet]
-
-            truth_set: Set[Tuple[int, int, int]] = set()
-            for truth_branch in TRUTH_BRANCHES:
-                parsed = _parse_triplet(chunk[truth_branch][local_idx])
-                if parsed is None:
-                    continue
-                if len(set(parsed)) != 3:
-                    continue
-                if min(parsed) < 0 or max(parsed) >= n_genjet:
-                    continue
-                sorted_triplet = tuple(sorted(parsed))
-                if parsed != sorted_triplet:
-                    unordered_truth_examples += 1
-                truth_set.add(sorted_triplet)
-                truth_triplets_total += 1
-
-            expected = math.comb(n_genjet, 3) if n_genjet >= 3 else 0
-            produced = 0
-
-            for i, j, k in itertools.combinations(range(n_genjet), 3):
-                produced += 1
-                payload = features.compute_triplet_feature_payload(genjet_pt, genjet_eta, genjet_phi, i, j, k)
-                features.assert_feature_values_sane([payload[name] for name in features.FEATURE_COLUMNS])
-
-                row = {
-                    "event_id": int(event_id),
-                    "i": int(i),
-                    "j": int(j),
-                    "k": int(k),
-                    "dr_ab": float(payload["dr_ab"]),
-                    "dr_ac": float(payload["dr_ac"]),
-                    "dr_bc": float(payload["dr_bc"]),
-                    "mij_over_m123_ab": float(payload["mij_over_m123_ab"]),
-                    "mij_over_m123_ac": float(payload["mij_over_m123_ac"]),
-                    "mij_over_m123_bc": float(payload["mij_over_m123_bc"]),
-                    "m123": float(payload["m123"]),
-                    "mij_ab": float(payload["mij_ab"]),
-                    "mij_ac": float(payload["mij_ac"]),
-                    "mij_bc": float(payload["mij_bc"]),
-                    "triplet_pt": float(payload["triplet_pt"]),
-                    "triplet_eta": float(payload["triplet_eta"]),
-                    "triplet_phi": float(payload["triplet_phi"]),
-                    "is_truth": int((i, j, k) in truth_set),
-                }
-                buffer.append_row(row)
-                processed_candidates += 1
-
-                if buffer.size >= args.flush_rows:
-                    _flush_buffer(writer, buffer)
-
-            if produced != expected:
-                raise RuntimeError(
-                    f"Candidate enumeration mismatch for event_id={event_id}: produced={produced}, expected={expected}"
-                )
-
-            processed_events += 1
-
-        if stop:
-            break
+    finally:
+        progress_bar.close()
 
     if buffer.size > 0:
         _flush_buffer(writer, buffer)
@@ -208,6 +236,7 @@ def run(args: argparse.Namespace) -> None:
             "step_size": args.step_size,
             "row_group_size": args.row_group_size,
             "flush_rows": args.flush_rows,
+            "no_progress": args.no_progress,
         },
         seed=args.seed,
     )
@@ -224,5 +253,6 @@ def register_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     parser.add_argument("--step-size", type=int, default=1000, help="ROOT iteration chunk size")
     parser.add_argument("--row-group-size", type=int, default=50_000, help="Parquet row group size")
     parser.add_argument("--flush-rows", type=int, default=50_000, help="In-memory row buffer flush threshold")
+    parser.add_argument("--no-progress", action="store_true", help="Disable live progress output")
     parser.add_argument("--seed", type=int, default=42, help="Deterministic seed for reproducibility metadata")
     parser.set_defaults(func=run)
