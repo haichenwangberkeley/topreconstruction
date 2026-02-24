@@ -14,6 +14,9 @@ Primary input is one or more ROOT files with at least these branches:
 - `truth_triplet_0..3`
 - event id branch (default: `Number`, configurable)
 
+Sample file for testing top quark reconstruction:
+- `ttbar.root`: `https://portal.nersc.gov/project/atlas/haichenwang/artifacts/ttbar.root`
+
 See `docs/branch_interpretation.md` and `docs/schema.md`.
 
 ## Outputs
