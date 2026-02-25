@@ -102,6 +102,47 @@ All candidate triplets must be saved.
 
 ---
 
+### Stage 5 — triplet selection
+
+Input:
+- inference parquet (`inference_test.parquet` or backend-specific equivalent)
+
+Output:
+- `selected_triplets.parquet`
+- `event_selection.parquet`
+- selection plots + metrics (`plots/*.png`, `plots/selection_plot_metrics.json`)
+- selection report/config snapshot
+
+Contents:
+- selected candidate rows with:
+  - `event_id`
+  - `selected_rank`
+  - triplet indices (`i`, `j`, `k`)
+  - score
+  - selected triplet four-vector:
+    - `triplet_pt`
+    - `triplet_eta`
+    - `triplet_phi`
+    - `triplet_mass`
+  - strategy name
+- event-level summary rows with:
+  - `event_id`
+  - total candidate triplet count
+  - selected top count (`n_top_selected`)
+  - fixed candidate slots:
+    - `top1_*`, `top2_*`, `top3_*`, `top4_*`
+    - each slot contains (`pt`, `eta`, `phi`, `mass`)
+    - missing slots use a dummy placeholder value
+  - invariant mass of two leading selected candidates (`m_top1_top2`)
+
+Characteristics:
+- supports multiple selection strategies
+- output count per event is variable
+- supports cap on selected triplets/event (default: 4)
+- can emit top-quantity distribution plots directly from stage output
+
+---
+
 ## 3. Input Data Requirements
 
 ### 3.1 Required Branches

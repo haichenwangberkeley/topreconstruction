@@ -34,16 +34,30 @@ python -m pip install -e .
 python -m pip install -e .[tabpfn]
 ```
 
+## Command Style
+
+All command examples below follow one style:
+- Run from repository root.
+- Use `python -m triplet_ml ...` for CLI stages.
+- Put one argument per line using trailing `\` for readability.
+
+Recent development summary:
+- `docs/changes_since_last_push.md` (changes since last pushed commit)
+
 ## Optional Makefile Workflow
 
 `Makefile` is included to run the exact same commands with consistent variables.
 
 ```bash
 # Full XGBoost pipeline
-make pipeline_xgb ROOT_INPUT=data/input.root MAX_EVENTS=40000
+make pipeline_xgb \
+  ROOT_INPUT=data/input.root \
+  MAX_EVENTS=40000
 
 # Full TabPFN pipeline
-make pipeline_tabpfn ROOT_INPUT=data/input.root MAX_EVENTS=40000
+make pipeline_tabpfn \
+  ROOT_INPUT=data/input.root \
+  MAX_EVENTS=40000
 ```
 
 Direct CLI commands remain fully supported (shown below).
@@ -97,8 +111,106 @@ python -m triplet_ml infer \
   --output-dir artifacts/infer
 ```
 
+## Select Reconstructed Top Candidates (Stage 5)
+
+Select variable-count top candidates per event from scored triplets.
+Default cap is 4 selected triplets per event.
+
+Outputs:
+- `selected_triplets.parquet`
+  - `event_id`, `selected_rank`, `i`, `j`, `k`, `score`
+  - selected triplet four-vector: `triplet_pt`, `triplet_eta`, `triplet_phi`, `triplet_mass`
+- `event_selection.parquet`
+  - `n_top_selected`
+  - fixed top-candidate slots `top1_*` ... `top4_*` (`pt`, `eta`, `phi`, `mass`)
+  - dummy placeholder for missing slots (default `-999.0`)
+  - `m_top1_top2` for the two leading selected candidates
+- `plots/`
+  - `n_top_selected.png`
+  - `m_top1_top2.png`
+  - `top_pt_by_rank.png`, `top_eta_by_rank.png`, `top_phi_by_rank.png`, `top_mass_by_rank.png`
+  - `selection_plot_metrics.json`
+
+```bash
+python -m triplet_ml select_triplets \
+  --inference artifacts/infer/inference_test.parquet \
+  --output-dir artifacts/select_triplets \
+  --strategy greedy_disjoint \
+  --min-score 0.5 \
+  --max-top-per-event 4
+```
+
+Plot notes:
+- Selection plots are generated automatically by default.
+- To disable them, add `--skip-plots`.
+- To control binning, use `--plot-bins` (default: `20`).
+- To change plot location, use `--plot-root` (default: `<output-dir>/plots`).
+
+Available strategies:
+- `greedy_disjoint`: sequential highest-score selection with non-overlapping jets
+- `top1`: highest-score triplet only
+- `topk`: top-k by score (`--top-k`)
+- `threshold`: all score-passing triplets up to cap
+
+## Plot From Persistent Histogram Cache
+
+This flow follows the plotting invariants: histogram production is separate from rendering.
+
+```bash
+# Step 1: build persistent histogram cache from inference parquet (single pass)
+python -m triplet_ml build_m123_hist_cache \
+  --inference artifacts/infer/inference_test.parquet \
+  --output-hist artifacts/plots/inference/xgb/m123_score_gt_0p5_hist_cache.npz \
+  --score-cut 0.5 \
+  --pt-bins 20 \
+  --pt-min 0 \
+  --pt-max 1000 \
+  --eta-bins 10 \
+  --eta-min -5 \
+  --eta-max 5 \
+  --observable-bins 80 \
+  --observable-min 0 \
+  --observable-max 500
+
+# Step 2: render true-vs-fake m123 from cached histogram only
+python -m triplet_ml plot_m123_hist_cache \
+  --histogram-cache artifacts/plots/inference/xgb/m123_score_gt_0p5_hist_cache.npz \
+  --output-png artifacts/plots/inference/xgb/m123_score_gt_0p5_truth_vs_fake_from_cache.png \
+  --title "m123 after score > 0.5 (true vs fake)"
+```
+
+## Plot 4-Way Cut Comparison For All Features
+
+Generate invariant-style overlays for all numeric columns in inference parquet:
+- true + pass (`score > cut`)
+- true + fail (`score <= cut`)
+- fake + pass
+- fake + fail
+
+Each plot includes a ratio panel in `[0.5, 1.5]`.
+
+```bash
+python -m triplet_ml plot_cut_comparison \
+  --inference artifacts/infer/inference_test.parquet \
+  --output-root artifacts/plots \
+  --score-cut 0.5 \
+  --bins 20 \
+  --nominal true_pass
+```
+
+To run on selected columns only, add:
+
+```bash
+python -m triplet_ml plot_cut_comparison \
+  --inference artifacts/infer/inference_test.parquet \
+  --output-root artifacts/plots \
+  --score-cut 0.5 \
+  --bins 20 \
+  --columns m123 triplet_pt triplet_eta
+```
+
 ## Notes
 
-- For a minimal/non-plot workflow, pass `--skip-plots` in `dataset_prepare`, `train`, and `infer`.
+- For a minimal/non-plot workflow, pass `--skip-plots` in `dataset_prepare`, `train`, `infer`, and `select_triplets`.
 - Live progress is shown on interactive terminals; disable with `--no-progress`.
-- TypePFN is not implemented in the current codebase; only `xgb` and `tabpfn` backends exist.
+- TabPFN is implemented; only `xgb` and `tabpfn` backends exist.

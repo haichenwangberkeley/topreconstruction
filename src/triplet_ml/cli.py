@@ -9,6 +9,7 @@ from . import dataset_build
 from . import dataset_prepare
 from . import infer
 from . import plotting
+from . import select_triplets
 from . import train
 
 
@@ -20,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     dataset_prepare.register_subparser(subparsers)
     train.register_subparser(subparsers)
     infer.register_subparser(subparsers)
+    select_triplets.register_subparser(subparsers)
     plotting.register_plot_subparsers(subparsers)
 
     return parser
