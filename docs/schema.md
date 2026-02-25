@@ -73,8 +73,10 @@ Input:
 - val.parquet
 
 Output:
-- trained XGBoost model
-- training report
+- backend-specific model artifact
+  - `model_xgb.json` or `model_tabpfn.pkl`
+- backend-specific training report
+  - `training_report_xgb.json` or `training_report_tabpfn.json`
 
 Characteristics:
 - Hyperparameters configurable
@@ -89,13 +91,14 @@ Input:
 - test.parquet
 
 Output:
-- inference_test.parquet
+- backend-specific inference parquet:
+  - `inference_test_xgb.parquet` or `inference_test_tabpfn.parquet`
 
 Contents:
 - event_id
 - triplet indices
 - features
-- model score
+- model score column (`score_xgb` or `score_tabpfn`)
 - truth flag
 
 All candidate triplets must be saved.
@@ -105,12 +108,12 @@ All candidate triplets must be saved.
 ### Stage 5 — triplet selection
 
 Input:
-- inference parquet (`inference_test.parquet` or backend-specific equivalent)
+- inference parquet (`inference_test_xgb.parquet` or `inference_test_tabpfn.parquet`)
 
 Output:
 - `selected_triplets.parquet`
 - `event_selection.parquet`
-- selection plots + metrics (`plots/*.png`, `plots/selection_plot_metrics.json`)
+- selection plots + metrics (`plots/*_<strategy>.png`, `plots/selection_plot_metrics_<strategy>.json`)
 - selection report/config snapshot
 
 Contents:
@@ -140,6 +143,7 @@ Characteristics:
 - output count per event is variable
 - supports cap on selected triplets/event (default: 4)
 - can emit top-quantity distribution plots directly from stage output
+- includes a two-top pair strategy (`best_pair_avg_disjoint`) that requires inferred `>= 6` jets and returns at most two mutually exclusive triplets (rank 1 and 2), leaving rank 3/4 slots as dummy placeholders
 
 ---
 

@@ -15,8 +15,9 @@ from . import progress as prog
 from . import triplet_io as pio
 
 
-STRATEGIES = ("greedy_disjoint", "top1", "topk", "threshold")
+STRATEGIES = ("greedy_disjoint", "top1", "topk", "threshold", "best_pair_avg_disjoint")
 EVENT_TOP_SLOTS = 4
+PAIR_STRATEGY_MIN_JETS = 6
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,12 @@ def _clean_values(values: Sequence[Any], drop_dummy: bool, dummy_value: float) -
     if drop_dummy:
         mask &= arr != float(dummy_value)
     return arr[mask]
+
+
+def _safe_filename_token(value: str) -> str:
+    token = "".join(ch if (ch.isalnum() or ch in ("_", "-", ".")) else "_" for ch in str(value))
+    token = token.strip("._")
+    return token or "strategy"
 
 
 def _auto_hist_range(moments: Sequence[_RunningMoments]) -> Tuple[float, float]:
@@ -345,12 +352,14 @@ def _generate_selection_plots(
     batch_size: int,
     bins: int,
     dummy_value: float,
+    strategy: str,
 ) -> Dict[str, Any]:
     _, ds, _ = _require_pyarrow()
     plt = _require_matplotlib()
 
     dataset = ds.dataset(str(event_selection_file), format="parquet")
     plot_dir = pio.ensure_dir(output_dir)
+    strategy_tag = _safe_filename_token(strategy)
     plot_specs = [
         {
             "stem": "n_top_selected",
@@ -428,6 +437,7 @@ def _generate_selection_plots(
         "plot_dir": str(plot_dir),
         "bins": int(bins),
         "dummy_value": float(dummy_value),
+        "strategy": str(strategy),
     }
 
     for spec in plot_specs:
@@ -452,7 +462,8 @@ def _generate_selection_plots(
             edges=edges,
         )
 
-        out_path = plot_dir / f"{spec['stem']}.png"
+        out_path = plot_dir / f"{spec['stem']}_{strategy_tag}.png"
+        title_with_strategy = f"{spec['title']} [strategy: {strategy}]"
         if spec["overlay"]:
             ordered_series = [
                 (
@@ -464,14 +475,41 @@ def _generate_selection_plots(
                 )
                 for (label, column, color, linestyle) in series
             ]
-            _plot_overlay_with_ratio(
-                plt=plt,
-                out_path=out_path,
-                edges=edges,
-                ordered_series=ordered_series,
-                title=spec["title"],
-                xlabel=spec["xlabel"],
-            )
+            ordered_series_nonempty = [row for row in ordered_series if float(np.sum(row[1])) > 0.0]
+            if len(ordered_series_nonempty) >= 2:
+                _plot_overlay_with_ratio(
+                    plt=plt,
+                    out_path=out_path,
+                    edges=edges,
+                    ordered_series=ordered_series_nonempty,
+                    title=title_with_strategy,
+                    xlabel=spec["xlabel"],
+                )
+            elif len(ordered_series_nonempty) == 1:
+                label, counts, variances, _, _ = ordered_series_nonempty[0]
+                _plot_single_hist(
+                    plt=plt,
+                    out_path=out_path,
+                    edges=edges,
+                    counts=counts,
+                    variances=variances,
+                    title=title_with_strategy,
+                    xlabel=spec["xlabel"],
+                    legend_label=f"{label} (n={int(np.sum(counts))})",
+                )
+            else:
+                # Keep a deterministic empty artifact if all series are dummy-filtered.
+                label, counts, variances, _, _ = ordered_series[0]
+                _plot_single_hist(
+                    plt=plt,
+                    out_path=out_path,
+                    edges=edges,
+                    counts=counts,
+                    variances=variances,
+                    title=title_with_strategy,
+                    xlabel=spec["xlabel"],
+                    legend_label=f"{label} (n={int(np.sum(counts))})",
+                )
         else:
             label, column, _, _ = series[0]
             _plot_single_hist(
@@ -480,7 +518,7 @@ def _generate_selection_plots(
                 edges=edges,
                 counts=counts_by_column[column],
                 variances=counts_by_column[column].copy(),
-                title=spec["title"],
+                title=title_with_strategy,
                 xlabel=spec["xlabel"],
                 legend_label=f"{label} (n={int(np.sum(counts_by_column[column]))})",
             )
@@ -503,7 +541,9 @@ def _generate_selection_plots(
             }
         )
 
-    pio.write_json(plot_dir / "selection_plot_metrics.json", summary)
+    metrics_path = plot_dir / f"selection_plot_metrics_{strategy_tag}.json"
+    summary["metrics_file"] = str(metrics_path)
+    pio.write_json(metrics_path, summary)
     return summary
 
 
@@ -554,12 +594,69 @@ def _select_greedy_disjoint(candidates: Sequence[TripletCandidate], max_top_per_
     return selected
 
 
+def _event_n_jets(triplets: Sequence[TripletCandidate]) -> int:
+    jets = set()
+    for t in triplets:
+        jets.add(int(t.i))
+        jets.add(int(t.j))
+        jets.add(int(t.k))
+    return int(len(jets))
+
+
+def _select_best_pair_avg_disjoint(
+    candidates: Sequence[TripletCandidate],
+    *,
+    n_jets_in_event: int,
+    max_top_per_event: int,
+) -> List[TripletCandidate]:
+    if max_top_per_event < 2:
+        return []
+    if n_jets_in_event < PAIR_STRATEGY_MIN_JETS:
+        return []
+    if len(candidates) < 2:
+        return []
+
+    best_pair: Optional[Tuple[TripletCandidate, TripletCandidate]] = None
+    best_key: Optional[Tuple[float, float, float, float, int, int, int, int, int, int]] = None
+
+    for idx_a in range(len(candidates) - 1):
+        a = candidates[idx_a]
+        jets_a = {int(a.i), int(a.j), int(a.k)}
+        for idx_b in range(idx_a + 1, len(candidates)):
+            b = candidates[idx_b]
+            jets_b = {int(b.i), int(b.j), int(b.k)}
+            if not jets_a.isdisjoint(jets_b):
+                continue
+
+            avg_score = 0.5 * (float(a.score) + float(b.score))
+            key = (
+                float(avg_score),
+                float(a.score + b.score),
+                float(a.score),
+                float(b.score),
+                -int(a.i),
+                -int(a.j),
+                -int(a.k),
+                -int(b.i),
+                -int(b.j),
+                -int(b.k),
+            )
+            if best_key is None or key > best_key:
+                best_key = key
+                best_pair = (a, b)
+
+    if best_pair is None:
+        return []
+    return [best_pair[0], best_pair[1]]
+
+
 def _apply_strategy(
     triplets: Sequence[TripletCandidate],
     strategy: str,
     min_score: float,
     max_top_per_event: int,
     top_k: int,
+    n_jets_in_event: int,
 ) -> List[TripletCandidate]:
     candidates = _sorted_candidates(triplets, min_score=min_score)
     if strategy == "greedy_disjoint":
@@ -570,6 +667,12 @@ def _apply_strategy(
         return _select_topk(candidates, max_top_per_event=max_top_per_event, top_k=top_k)
     if strategy == "threshold":
         return _select_threshold(candidates, max_top_per_event=max_top_per_event)
+    if strategy == "best_pair_avg_disjoint":
+        return _select_best_pair_avg_disjoint(
+            candidates,
+            n_jets_in_event=n_jets_in_event,
+            max_top_per_event=max_top_per_event,
+        )
     raise RuntimeError(f"Unknown strategy: {strategy}")
 
 
@@ -582,6 +685,8 @@ def run(args: argparse.Namespace) -> None:
         raise ValueError(f"--max-top-per-event must be <= {EVENT_TOP_SLOTS}")
     if args.top_k <= 0:
         raise ValueError("--top-k must be > 0")
+    if args.strategy == "best_pair_avg_disjoint" and args.max_top_per_event < 2:
+        raise ValueError("--max-top-per-event must be >= 2 for --strategy best_pair_avg_disjoint")
     if args.plot_bins <= 0:
         raise ValueError("--plot-bins must be > 0")
 
@@ -665,6 +770,8 @@ def run(args: argparse.Namespace) -> None:
     events_total = 0
     selected_rows_total = 0
     events_with_selection = 0
+    events_with_lt6_jets = 0
+    events_with_ge6_jets = 0
 
     def flush_buffers(force: bool = False) -> None:
         if selected_buffer.size >= args.flush_rows or (force and selected_buffer.size > 0):
@@ -673,15 +780,21 @@ def run(args: argparse.Namespace) -> None:
             event_writer.write_rows(event_buffer.take_all())
 
     def flush_event(event_id: int, triplets: Sequence[TripletCandidate]) -> None:
-        nonlocal events_total, selected_rows_total, events_with_selection
+        nonlocal events_total, selected_rows_total, events_with_selection, events_with_lt6_jets, events_with_ge6_jets
 
         events_total += 1
+        n_jets_in_event = _event_n_jets(triplets)
+        if n_jets_in_event < PAIR_STRATEGY_MIN_JETS:
+            events_with_lt6_jets += 1
+        else:
+            events_with_ge6_jets += 1
         selected = _apply_strategy(
             triplets=triplets,
             strategy=args.strategy,
             min_score=args.min_score,
             max_top_per_event=args.max_top_per_event,
             top_k=args.top_k,
+            n_jets_in_event=n_jets_in_event,
         )
 
         event_row: Dict[str, float | int] = {
@@ -783,6 +896,7 @@ def run(args: argparse.Namespace) -> None:
             batch_size=args.batch_size,
             bins=args.plot_bins,
             dummy_value=args.dummy_value,
+            strategy=args.strategy,
         )
 
     report = {
@@ -799,6 +913,8 @@ def run(args: argparse.Namespace) -> None:
         "events_with_selection": int(events_with_selection),
         "events_without_selection": int(events_total - events_with_selection),
         "avg_selected_per_event": float(selected_rows_total / events_total) if events_total > 0 else 0.0,
+        "events_with_lt6_jets_inferred": int(events_with_lt6_jets),
+        "events_with_ge6_jets_inferred": int(events_with_ge6_jets),
         "selected_triplets_file": str(selected_path),
         "event_selection_file": str(event_path),
         "plot_metrics": plot_metrics,
@@ -815,6 +931,7 @@ def run(args: argparse.Namespace) -> None:
             "min_score": args.min_score,
             "max_top_per_event": args.max_top_per_event,
             "top_k": args.top_k,
+            "pair_strategy_min_jets": PAIR_STRATEGY_MIN_JETS,
             "dummy_value": args.dummy_value,
             "row_group_size": args.row_group_size,
             "batch_size": args.batch_size,

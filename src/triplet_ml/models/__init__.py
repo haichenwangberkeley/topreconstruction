@@ -37,21 +37,21 @@ def default_training_report_filename(model_backend: str) -> str:
     model = normalize_model_backend(model_backend)
     if model == "tabpfn":
         return "training_report_tabpfn.json"
-    return "training_report.json"
+    return "training_report_xgb.json"
 
 
 def default_inference_filename(model_backend: str) -> str:
     model = normalize_model_backend(model_backend)
     if model == "tabpfn":
         return "inference_test_tabpfn.parquet"
-    return "inference_test.parquet"
+    return "inference_test_xgb.parquet"
 
 
 def inference_score_column(model_backend: str) -> str:
     model = normalize_model_backend(model_backend)
     if model == "tabpfn":
         return "score_tabpfn"
-    return "score"
+    return "score_xgb"
 
 
 def create_model(model_backend: str, feature_columns: Sequence[str], **kwargs: Any):
@@ -109,4 +109,3 @@ def resolve_backend_and_path(
     if model_path is not None:
         raise ValueError("Provide either --model as a backend/path OR --model-path, not both path forms together.")
     return infer_model_backend_from_path(legacy_path), legacy_path
-

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import time
 from pathlib import Path
 from typing import Dict
@@ -56,6 +57,7 @@ def run(args: argparse.Namespace) -> None:
         if args.output_file
         else output_dir / default_inference_filename(model_backend)
     )
+    report_path = output_dir / f"inference_report_{model_backend}.json"
     score_column = inference_score_column(model_backend)
 
     model = load_model(
@@ -151,14 +153,15 @@ def run(args: argparse.Namespace) -> None:
         "rows_output": n_output,
         "model": model_path,
         "output_file": str(output_path),
+        "report_file": str(report_path),
         "score_column": score_column,
         "prediction_time_seconds": float(prediction_time_seconds),
         "plot_metrics": plot_metrics,
         "comparison_plot_metrics": comparison_plot_metrics,
     }
-    pio.write_json(output_dir / "inference_report.json", report)
+    pio.write_json(report_path, report)
 
-    pio.write_config_snapshot(
+    snapshot_path = pio.write_config_snapshot(
         output_dir=output_dir,
         stage="inference",
         input_files=[model_path, args.test],
@@ -174,6 +177,7 @@ def run(args: argparse.Namespace) -> None:
         },
         seed=args.seed,
     )
+    shutil.copyfile(snapshot_path, output_dir / f"config_snapshot_infer_{model_backend}.json")
 
 
 def register_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

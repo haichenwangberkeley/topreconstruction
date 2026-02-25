@@ -126,10 +126,10 @@ OMP_NUM_THREADS=8 python -m triplet_ml infer \
 ```bash
 python -c "import json; print(json.load(open('artifacts/run_40000/dataset_build/dataset_build_report.json')))"
 python -c "import json; print(json.load(open('artifacts/run_40000/dataset_prepare/dataset_prepare_report.json')))"
-python -c "import json; d=json.load(open('artifacts/run_40000/train/training_report.json')); print({'best_iteration': d.get('best_iteration'), 'val_auc': d['metrics']['val_auc'], 'val_logloss': d['metrics']['val_logloss']})"
-python -c "import json; print(json.load(open('artifacts/run_40000/infer/inference_report.json')))"
+python -c "import json; d=json.load(open('artifacts/run_40000/train/training_report_xgb.json')); print({'best_iteration': d.get('best_iteration'), 'val_auc': d['metrics']['val_auc'], 'val_logloss': d['metrics']['val_logloss']})"
+python -c "import json; print(json.load(open('artifacts/run_40000/infer/inference_report_xgb.json')))"
 ```
 
 ## 5. Scope Note
 
-TypePFN is not implemented in this repository. Supported backends are `xgb` and `tabpfn`.
+TabPFN is implemented in this repository. Supported backends are `xgb` and `tabpfn`.

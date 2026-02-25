@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import shutil
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -425,7 +426,8 @@ def run(args: argparse.Namespace) -> None:
         }
 
         pio.write_json(report_path, report)
-        with open(output_dir / "training_statistics.md", "w", encoding="utf-8") as handle:
+        training_stats_path = output_dir / f"training_statistics_{model_backend}.md"
+        with open(training_stats_path, "w", encoding="utf-8") as handle:
             handle.write(
                 "\n".join(
                     [
@@ -484,13 +486,14 @@ def run(args: argparse.Namespace) -> None:
                 }
             )
 
-        pio.write_config_snapshot(
+        snapshot_path = pio.write_config_snapshot(
             output_dir=output_dir,
             stage="train",
             input_files=[args.train, args.val] + ([resolved_test] if resolved_test is not None else []),
             parameters=snapshot_parameters,
             seed=args.seed,
         )
+        shutil.copyfile(snapshot_path, output_dir / f"config_snapshot_train_{model_backend}.json")
         stage_done += 1
         stage_progress.set_current(stage_done)
     finally:

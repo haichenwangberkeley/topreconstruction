@@ -75,9 +75,18 @@ python -m triplet_ml infer \
 
 # Stage 5: greedy sequential triplet selection (cap 4/event)
 python -m triplet_ml select_triplets \
-  --inference "${RUN_DIR}/infer/inference_test.parquet" \
+  --inference "${RUN_DIR}/infer/inference_test_xgb.parquet" \
   --output-dir "${RUN_DIR}/select_triplets" \
   --strategy greedy_disjoint \
+  --min-score 0.5 \
+  --max-top-per-event 4 \
+  --dummy-value -999.0
+
+# Stage 5 (alternative): two-top pair strategy
+python -m triplet_ml select_triplets \
+  --inference "${RUN_DIR}/infer/inference_test_xgb.parquet" \
+  --output-dir "${RUN_DIR}/select_triplets_pair" \
+  --strategy best_pair_avg_disjoint \
   --min-score 0.5 \
   --max-top-per-event 4 \
   --dummy-value -999.0
@@ -102,9 +111,17 @@ python -m triplet_ml infer \
   --plot-root "${RUN_DIR}/plots"
 
 python -m triplet_ml select_triplets \
-  --inference "${RUN_DIR}/infer/inference_test.parquet" \
+  --inference "${RUN_DIR}/infer/inference_test_xgb.parquet" \
   --output-dir "${RUN_DIR}/select_triplets" \
   --strategy greedy_disjoint \
+  --min-score 0.5 \
+  --max-top-per-event 4 \
+  --dummy-value -999.0
+
+python -m triplet_ml select_triplets \
+  --inference "${RUN_DIR}/infer/inference_test_xgb.parquet" \
+  --output-dir "${RUN_DIR}/select_triplets_pair" \
+  --strategy best_pair_avg_disjoint \
   --min-score 0.5 \
   --max-top-per-event 4 \
   --dummy-value -999.0
@@ -122,7 +139,7 @@ To disable plots, add:
 python - <<'PY'
 import json
 print(json.load(open("study/artifacts/run_last10k/dataset_build/dataset_build_report.json"))["processed_events"])
-print(json.load(open("study/artifacts/run_last10k/infer/inference_report.json"))["rows_output"])
+print(json.load(open("study/artifacts/run_last10k/infer/inference_report_xgb.json"))["rows_output"])
 print(json.load(open("study/artifacts/run_last10k/select_triplets/selection_report.json"))["selected_rows_total"])
 PY
 ```
