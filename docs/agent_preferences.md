@@ -1,4 +1,4 @@
-# Agent preferences for plotting (agent.md)
+# Agent Preferences for Plotting
 
 These are my preferred default plotting cuts and ranges so Copilot (or other agents)
 can apply them automatically when generating plots.
@@ -29,7 +29,7 @@ File output and deployment:
   output directory and then deploy to `/global/cfs/projectdirs/atlas/www/haichen/plots/` via
   `rsync` (see README.md) so I can view them via the portal.
 
-If you want, I can modify `plot_jets.py` (and other plotting scripts) to automatically
+If you want, I can modify `data_processing/plot_jets.py` (and other plotting scripts) to automatically
 apply these ranges by default. Say "please apply preferences" and I'll update the scripts.
 
 Cutflow / event storage preferences:
@@ -38,7 +38,7 @@ Cutflow / event storage preferences:
 - When storing selected-event jets, store up to 10 jets per event in order of appearance and pad missing jets with zeros.
 - Store per-jet quantities in the order `(pt, eta, phi, m)` and save as a single NumPy file `selected_jets.npy` with shape `(N_events_selected, 10, 4)`.
 
-When asked to generate cutflow + event storage, the agent should run `cutflow_and_store.py` and save outputs to the specified outdir. Document any deviations in the HTML or README output.
+When asked to generate cutflow + event storage, the agent should run `data_processing/cutflow_and_store.py` and save outputs to the specified outdir. Document any deviations in the HTML or README output.
 
 Triplet reconstruction notes for agents:
 
@@ -58,7 +58,7 @@ Deployment guidance for agents:
 Example agent command:
 
 ```
-python plot_jets.py ttbar.root --outdir plots --deploy --task-name myAnalysis
+python data_processing/plot_jets.py ttbar.root --outdir plots --deploy --task-name myAnalysis
 ```
 
 The agent should then report the public URL for the deployed folder:
@@ -74,13 +74,13 @@ Agent-run procedure (recommended):
 2. Run (test subset):
 
 ```
-python triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --max-events 10000
+python analysis/triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --max-events 10000
 ```
 
 3. Inspect `triplet_plots/index.html` locally (or deploy):
 
 ```
-python triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --deploy
+python analysis/triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --deploy
 ```
 
 Files produced:
@@ -93,4 +93,3 @@ Data conventions reminder for downstream agents:
 - `selected_jets.npy` layout: `array[event, jet_index(0..9), feature(0..3)]`
   - `feature` order: 0=`pt` [GeV], 1=`eta`, 2=`phi` [rad], 3=`m` [GeV]
 - Zero-padded jets have `pt==0` and should be ignored.
-

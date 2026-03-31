@@ -12,12 +12,12 @@ The BDT (XGBoost) hyperparameters must be read from a configuration file instead
 Hardcoded hyperparameters make experiments harder to reproduce, compare, and tune.
 
 ### Requirements
-- Add a config file (YAML or JSON) under `clean_repo/docs/` or another clearly documented config location.
+- Add a config file (YAML or JSON) under `top_reco/docs/` or another clearly documented config location.
 - Move current XGBoost training hyperparameters from code defaults into that config file.
 - Ensure training can run by loading the config file values at runtime.
 - Keep CLI overrides possible (CLI values should override config values when explicitly provided).
 - Persist the resolved hyperparameters in `config_snapshot.json` for reproducibility.
-- Update `clean_repo/docs/run_instructions.md` with the new usage pattern.
+- Update `top_reco/docs/run_instructions.md` with the new usage pattern.
 
 ### Scope
 - This item applies to the BDT/XGBoost training path only.
@@ -56,4 +56,4 @@ Long-running jobs need transparent runtime feedback so users and agents can trac
 - Each listed stage shows a live progress bar (or equivalent incremental progress) during execution.
 - Output remains readable and does not break existing JSON/markdown artifact writing.
 - Users can disable progress output when needed (for batch/non-interactive workflows).
-- `clean_repo/docs/run_instructions.md` documents progress behavior and any relevant flags.
+- `top_reco/docs/run_instructions.md` documents progress behavior and any relevant flags.

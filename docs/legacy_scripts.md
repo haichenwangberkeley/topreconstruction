@@ -1,4 +1,4 @@
-# print_ttree_branches.py
+# data_processing/print_ttree_branches.py
 
 Small helper to list branches (and their types) of the first TTree found (or a named tree)
 in a ROOT file using only `uproot`.
@@ -7,13 +7,13 @@ Usage:
 
 ```bash
 # Print branches (name : type) to stdout
-python print_ttree_branches.py ttbar.root
+python data_processing/print_ttree_branches.py ttbar.root
 
 # Save branches (name : type) to a text file
-python print_ttree_branches.py ttbar.root --output branches.txt
+python data_processing/print_ttree_branches.py ttbar.root --output branches.txt
 
 # Specify a tree name
-python print_ttree_branches.py ttbar.root --tree MyTree --output MyTree_branches.txt
+python data_processing/print_ttree_branches.py ttbar.root --tree MyTree --output MyTree_branches.txt
 ```
 
 Output is a plain text file with one branch name per line.
@@ -40,7 +40,7 @@ python -m pip install uproot awkward numpy matplotlib
 
 ```bash
 # create plots/ and write PNG + index.html
-python plot_jets.py ttbar.root --outdir plots
+python data_processing/plot_jets.py ttbar.root --outdir plots
 ```
 
 - **View:** Open the generated viewer in your desktop browser:
@@ -54,7 +54,7 @@ xdg-open plots/index.html
 
 **Deploying plots to the public CFS directory**
 
-After you generate plots with `plot_jets.py`, copy them to the public CFS folder so you can open them via the portal. Recommended, safe steps (do not use `777`):
+After you generate plots with `data_processing/plot_jets.py`, copy them to the public CFS folder so you can open them via the portal. Recommended, safe steps (do not use `777`):
 
 ```bash
 # copy plots to the public web directory (preserves timestamps, removes deleted files)
@@ -93,14 +93,14 @@ Notes:
 
 ## Cutflow and event storage script
 
-`cutflow_and_store.py` computes a simple jet-based cutflow and stores selected event
+`data_processing/cutflow_and_store.py` computes a simple jet-based cutflow and stores selected event
 jet information for events with six or more selected jets.
 
 Quick usage:
 
 ```bash
 # run and save to cutflow_output/
-python cutflow_and_store.py ttbar.root --outdir cutflow_output
+python data_processing/cutflow_and_store.py ttbar.root --outdir cutflow_output
 ```
 
 Outputs written to `cutflow_output/`:
@@ -149,16 +149,16 @@ trip0_idx = data['truth_triplet_0']      # (Nsel,3)
 top_pts = data['top_pt']                 # (Nsel,4)
 ```
 
-See `cutflow_and_store.py` for implementation details.
+See `data_processing/cutflow_and_store.py` for implementation details.
 
 ## Triplet reconstruction (top candidate)
 
-Use `triplet_reco.py` to process a saved `selected_jets.npy` file and reconstruct a
+Use `analysis/triplet_reco.py` to process a saved `selected_jets.npy` file and reconstruct a
 top-quark candidate per event by selecting the jet triplet with the highest triplet pT.
 
 ```bash
 # generate triplet plots from the stored selected_jets.npy
-python triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots
+python analysis/triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots
 ```
 
 The script writes PNG histograms for the triplet-level `pT`, `eta`, `phi`, and `mass`.
@@ -167,7 +167,7 @@ web directory (`/global/cfs/projectdirs/atlas/www/haichen/plots/`).
 
 Deployment with task names:
 
-Both `plot_jets.py` and `triplet_reco.py` support an optional `--task-name` together with `--deploy`.
+Both `data_processing/plot_jets.py` and `analysis/triplet_reco.py` support an optional `--task-name` together with `--deploy`.
 When `--deploy` is given the generated plots are copied into a timestamped subdirectory under
 `/global/cfs/projectdirs/atlas/www/haichen/plots/`. If `--task-name` is provided the directory name
 is `{task_name}_{timestamp}`, otherwise just `{timestamp}` is used. This avoids overwriting prior
@@ -177,7 +177,7 @@ Example:
 
 ```bash
 # deploy and group under task 'runA'
-python triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --max-events 10000 --deploy --task-name runA
+python analysis/triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --max-events 10000 --deploy --task-name runA
 ```
 
 
@@ -194,13 +194,13 @@ Example runs:
 
 ```bash
 # run on all events (may take long if file is large)
-python triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots
+python analysis/triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots
 
 # test on the first 10k events
-python triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --max-events 10000
+python analysis/triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --max-events 10000
 
 # run and deploy the plots to the public CFS folder (requires write access)
-python triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --deploy
+python analysis/triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots --deploy
 ```
 
 Notes:

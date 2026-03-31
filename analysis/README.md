@@ -13,5 +13,5 @@ This subproject contains triplet-score and triplet-interpretation analysis scrip
 
 ## Notes
 
-Root-level files with the same names are compatibility wrappers and forward to
-these canonical script locations.
+Run these scripts via their directory paths (for example,
+`python analysis/triplet_reco.py ...`).

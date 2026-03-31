@@ -3,7 +3,7 @@
 Deterministic triplet branch interpretation diagnostics (no plotting).
 
 Run:
-    python diagnose_triplet_interpretation.py
+    python analysis/diagnose_triplet_interpretation.py
 """
 
 from __future__ import annotations

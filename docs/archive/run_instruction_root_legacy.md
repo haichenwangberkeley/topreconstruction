@@ -13,7 +13,7 @@ cd /global/homes/h/haichen/disk/top
 Install dependencies (if needed):
 
 ```bash
-python -m pip install --user pyarrow xgboost uproot awkward
+.venv/bin/python -m pip install -e top_reco
 ```
 
 ## 1. Prepare output directories
@@ -28,7 +28,7 @@ mkdir -p artifacts/run_40000/dataset_build \
 ## 2. Stage 1: dataset_build (ROOT -> triplets_raw.parquet)
 
 ```bash
-python main.py dataset_build \
+.venv/bin/python -m triplet_ml dataset_build \
   --inputs ttbar.root \
   --output-dir artifacts/run_40000/dataset_build \
   --max-events 40000 \
@@ -43,7 +43,7 @@ Expected outputs:
 ## 3. Stage 2: dataset_prepare (split + balancing)
 
 ```bash
-python main.py dataset_prepare \
+.venv/bin/python -m triplet_ml dataset_prepare \
   --input artifacts/run_40000/dataset_build/triplets_raw.parquet \
   --output-dir artifacts/run_40000/dataset_prepare \
   --seed 42
@@ -59,7 +59,7 @@ Expected outputs:
 ## 4. Stage 3: train (train+val -> model)
 
 ```bash
-python main.py train \
+.venv/bin/python -m triplet_ml train \
   --train artifacts/run_40000/dataset_prepare/train.parquet \
   --val artifacts/run_40000/dataset_prepare/val.parquet \
   --output-dir artifacts/run_40000/train \
@@ -77,11 +77,11 @@ Expected outputs:
 Recommended stable run (limited threads):
 
 ```bash
-OMP_NUM_THREADS=8 python main.py infer \
-  --model artifacts/run_40000/train/model_xgb.json \
+OMP_NUM_THREADS=8 .venv/bin/python -m triplet_ml infer \
+  --model xgb \
   --test artifacts/run_40000/dataset_prepare/test.parquet \
+  --train-output-dir artifacts/run_40000/train \
   --output-dir artifacts/run_40000/infer \
-  --batch-size 25000 \
   --seed 42
 ```
 

@@ -8,13 +8,14 @@ This runbook provides command lines to:
 Run from repository root:
 
 ```bash
-cd /global/homes/h/haichen/disk/top/clean_repo
-export PYTHONPATH=src
+cd /global/homes/h/haichen/disk/top
+export PYTHONPATH=top_reco/src
 ```
 
 Set paths:
 
 ```bash
+PYTHON=.venv/bin/python
 ROOT_SRC=/global/cfs/projectdirs/atlas/www/haichenwang/artifacts/ttbar.root
 LAST10K_ROOT=study/data/ttbar_last_10000.root
 RUN_DIR=study/artifacts/run_last10k
@@ -26,7 +27,7 @@ MODEL_PATH=study/artifacts/run_10000/train/model_xgb.json
 This avoids the RNTuple/TTree auto-detection issue.
 
 ```bash
-python - <<'PY'
+${PYTHON} - <<'PY'
 from pathlib import Path
 import uproot
 
@@ -61,12 +62,12 @@ PY
 Then run build + inference:
 
 ```bash
-python -m triplet_ml dataset_build \
+${PYTHON} -m triplet_ml dataset_build \
   --inputs "${LAST10K_ROOT}" \
   --output-dir "${RUN_DIR}/dataset_build" \
   --max-events 10000
 
-python -m triplet_ml infer \
+${PYTHON} -m triplet_ml infer \
   --model xgb \
   --model-path "${MODEL_PATH}" \
   --test "${RUN_DIR}/dataset_build/triplets_raw.parquet" \
@@ -74,7 +75,7 @@ python -m triplet_ml infer \
   --plot-root "${RUN_DIR}/plots"
 
 # Stage 5: greedy sequential triplet selection (cap 4/event)
-python -m triplet_ml select_triplets \
+${PYTHON} -m triplet_ml select_triplets \
   --inference "${RUN_DIR}/infer/inference_test_xgb.parquet" \
   --output-dir "${RUN_DIR}/select_triplets" \
   --strategy greedy_disjoint \
@@ -83,7 +84,7 @@ python -m triplet_ml select_triplets \
   --dummy-value -999.0
 
 # Stage 5 (alternative): two-top pair strategy
-python -m triplet_ml select_triplets \
+${PYTHON} -m triplet_ml select_triplets \
   --inference "${RUN_DIR}/infer/inference_test_xgb.parquet" \
   --output-dir "${RUN_DIR}/select_triplets_pair" \
   --strategy best_pair_avg_disjoint \
@@ -97,20 +98,20 @@ python -m triplet_ml select_triplets \
 If your `LAST10K_ROOT` already exists and is `ROOT::RNTuple` with key `output`, run:
 
 ```bash
-python -m triplet_ml dataset_build \
+${PYTHON} -m triplet_ml dataset_build \
   --inputs "${LAST10K_ROOT}" \
   --tree-name output \
   --output-dir "${RUN_DIR}/dataset_build" \
   --max-events 10000
 
-python -m triplet_ml infer \
+${PYTHON} -m triplet_ml infer \
   --model xgb \
   --model-path "${MODEL_PATH}" \
   --test "${RUN_DIR}/dataset_build/triplets_raw.parquet" \
   --output-dir "${RUN_DIR}/infer" \
   --plot-root "${RUN_DIR}/plots"
 
-python -m triplet_ml select_triplets \
+${PYTHON} -m triplet_ml select_triplets \
   --inference "${RUN_DIR}/infer/inference_test_xgb.parquet" \
   --output-dir "${RUN_DIR}/select_triplets" \
   --strategy greedy_disjoint \
@@ -118,7 +119,7 @@ python -m triplet_ml select_triplets \
   --max-top-per-event 4 \
   --dummy-value -999.0
 
-python -m triplet_ml select_triplets \
+${PYTHON} -m triplet_ml select_triplets \
   --inference "${RUN_DIR}/infer/inference_test_xgb.parquet" \
   --output-dir "${RUN_DIR}/select_triplets_pair" \
   --strategy best_pair_avg_disjoint \
@@ -136,7 +137,7 @@ To disable plots, add:
 ## Quick checks
 
 ```bash
-python - <<'PY'
+${PYTHON} - <<'PY'
 import json
 print(json.load(open("study/artifacts/run_last10k/dataset_build/dataset_build_report.json"))["processed_events"])
 print(json.load(open("study/artifacts/run_last10k/infer/inference_report_xgb.json"))["rows_output"])

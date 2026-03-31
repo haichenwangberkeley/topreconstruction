@@ -54,10 +54,19 @@ Manifest schema:
 Migration notes for the single-repo cutover:
 - `docs/MIGRATION.md`
 
+Canonical pipeline reference docs:
+- `top_reco/docs/run_instructions.md`
+- `top_reco/docs/schema.md`
+
 Legacy script-focused overview has been preserved in:
-- `README_legacy_scripts.md`
+- `docs/legacy_scripts.md`
 
-## Compatibility
+## Layout Policy
 
-Several root-level script names are preserved as compatibility wrappers and now
-forward to canonical files under `data_processing/` and `analysis/`.
+Pipeline and analysis scripts are consolidated under component directories:
+
+- `top_reco/src/triplet_ml/` for staged ML pipeline code.
+- `data_processing/` for ROOT inspection and cutflow/event-storage utilities.
+- `analysis/` for triplet interpretation and reconstruction analysis scripts.
+
+The repository root keeps orchestration and metadata files only.

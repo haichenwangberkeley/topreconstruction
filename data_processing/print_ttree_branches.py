@@ -3,7 +3,7 @@
 Print branch names of a TTree in a ROOT file using only uproot.
 
 Usage:
-    python print_ttree_branches.py input.root [--tree TreeName] [--output out.txt]
+    python data_processing/print_ttree_branches.py input.root [--tree TreeName] [--output out.txt]
 
 The script finds the first TTree in the file (or the named tree) and
 prints the branch names, one per line. If `--output` is provided the

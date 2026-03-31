@@ -3,7 +3,7 @@
 inspect_selected_events.py
 
 Quick script to report number of entries and variables in a .npz file.
-Usage: python inspect_selected_events.py [path/to/file.npz]
+Usage: python data_processing/inspect_selected_events.py [path/to/file.npz]
 """
 import argparse
 import os

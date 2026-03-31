@@ -10,7 +10,7 @@ Generates PNG files for:
 Also writes `index.html` in the output directory to view the images.
 
 Usage:
-  python plot_jets.py input.root --outdir plots
+  python data_processing/plot_jets.py input.root --outdir plots
 
 Dependencies: uproot, awkward, numpy, matplotlib
 """
@@ -116,7 +116,7 @@ def main():
     import awkward as ak
     import numpy as np
 
-    # Preferences / clipping ranges (from agent.md):
+    # Preferences / clipping ranges (from docs/agent_preferences.md):
     pt_max = 500.0
     jet_eta_range = (-4.4, 4.4)
     photon_eta_range = (-2.5, 2.5)

@@ -7,7 +7,7 @@ find the jet triplet with the highest pT per event, and produce kinematic
 histograms for the selected triplet system (pT, eta, phi, mass).
 
 Usage:
-  python triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots [--max-events N] [--deploy]
+  python analysis/triplet_reco.py cutflow_output/selected_jets.npy --outdir triplet_plots [--max-events N] [--deploy]
 
 Options:
   --max-events : limit number of processed events (for testing)
