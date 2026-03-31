@@ -1,0 +1,12 @@
+{
+  "num_boost_round": 400,
+  "early_stopping_rounds": 30,
+  "eta": 0.05,
+  "max_depth": 6,
+  "min_child_weight": 1.0,
+  "subsample": 0.8,
+  "colsample_bytree": 0.8,
+  "reg_lambda": 1.0,
+  "tree_method": "hist",
+  "use_sample_weights": false
+}

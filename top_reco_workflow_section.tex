@@ -1,0 +1,105 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{enumitem}
+
+\title{Workflow Section: Top Reconstruction Pipeline}
+\author{Prepared from Repository Material Only}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{The Modular Machine-Learning Pipeline}
+
+The main implementation described in \texttt{schema.md}, \texttt{run\_intruction.md}, \texttt{clean\_repo/README.md}, and the Python modules follows a staged workflow. Before naming the stages in software terms, it is useful to describe them conceptually.
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Stage 1 --- generate the physically allowed top hypotheses.} At the conceptual level, each event is treated as a collection of possible three-jet top-decay interpretations. The goal is not to choose immediately, but to enumerate the candidate hypotheses and mark which ones agree with the truth definition. In the codebase, this is the \texttt{dataset\_build} stage: ROOT input is converted into \texttt{triplets\_raw.parquet}, each row carries \texttt{event\_id}, triplet indices \texttt{i,j,k}, the engineered features, observables, and the label \texttt{is\_truth}.
+  \item \textbf{Stage 2 --- organize the learning problem without breaking event coherence.} Conceptually, one wants to learn from some events, validate on others, and test on a separate sample, while keeping all triplets from the same event together. At the same time, one wants to prevent the many fake triplets from overwhelming the rare truth-matched ones. In the codebase, this is \texttt{dataset\_prepare}: the stage applies deterministic event-level splitting, uses \texttt{assign\_split}, applies the \texttt{max\_bg\_per\_event} cap to train and validation, and writes \texttt{train.parquet}, \texttt{val.parquet}, and \texttt{test.parquet}.
+  \item \textbf{Stage 3 --- learn what a real top-like triplet looks like.} In physics language, the model is learning the internal kinematic pattern of a genuine top candidate as distinct from accidental jet combinations. In machine-learning language, this is supervised binary classification of truth versus combinatorial background. In the codebase, this is the \texttt{train} stage in which either \texttt{xgb} or \texttt{tabpfn} is trained from the six \texttt{FEATURE\_COLUMNS}, and the outputs include \texttt{model\_xgb.json} or \texttt{model\_tabpfn.pkl} together with \texttt{training\_report*.json}.
+  \item \textbf{Stage 4 --- assign a plausibility score to every candidate.} Conceptually, this stage turns the trained model into a ranking function over all remaining top hypotheses. Rather than selecting only one candidate immediately, it preserves the full candidate population together with a learned measure of how signal-like each triplet is. In the codebase, this is \texttt{infer}: the stage reads the test dataset in batches, appends a score column such as \texttt{score} or \texttt{score\_tabpfn}, and writes \texttt{inference\_test.parquet}.
+  \item \textbf{Stage 5 --- turn triplet scores into event-level reconstructed tops.} Conceptually, the reconstruction problem returns to the event level: the scored triplets are used to select one or more top candidates that summarize the event in a physically interpretable way. In the codebase, this is the packaged \texttt{select\_triplets} stage under \texttt{clean\_repo/src/triplet\_ml}: strategies such as \texttt{greedy\_disjoint}, \texttt{top1}, and \texttt{best\_pair\_avg\_disjoint} write \texttt{selected\_triplets.parquet} and \texttt{event\_selection.parquet}.
+\end{itemize}
+
+This staged design matters because it decouples expensive combinatorial enumeration from model development. Once \texttt{triplets\_raw.parquet} has been produced, different balancing settings, different models, and repeated training runs can be attempted without re-reading the ROOT input and without re-enumerating all triplets.
+
+\subsection{Stage 1: Building the Triplet Dataset}
+
+Conceptually, the first stage turns a single event into a full space of top-candidate hypotheses. It does this by refusing to guess too early: every allowed three-jet interpretation is kept, and the truth information is used only to label which hypotheses are physically correct.
+
+Technically, the \texttt{dataset\_build.py} stage uses \texttt{uproot.iterate} to stream over the required ROOT branches. It resolves the TTree name automatically unless the user provides one explicitly. For each event it determines the event identifier, copies the generator-level jet arrays, constructs the event's truth-triplet set, and loops over all candidate triplets. Every candidate row is appended into a column buffer and periodically flushed to a streaming Parquet writer. This is why the schema describes \texttt{dataset\_build} as the expensive stage.
+
+The outputs of this stage are more than just the Parquet file. A JSON report records, among other things, the number of processed events, the number of candidate triplets written, the total number of valid truth triplets, and the event-id branch that was actually used. A separate \texttt{config\_snapshot.json} captures the input files, tree name, requested event-id branch, maximum number of events, chunk size, and row-group settings.
+
+\subsection{Stage 2: Event-Level Splitting and Balancing}
+
+Conceptually, the second stage prepares a fair learning problem. It preserves the idea that an event is a coherent object while also preventing the overwhelming population of fake triplets from dominating the statistical picture.
+
+Technically, the \texttt{dataset\_prepare.py} stage reads the raw triplet Parquet dataset, groups rows by \texttt{event\_id}, and assigns each event to train, validation, or test using a deterministic hash-based split. The default fractions are
+\[
+20\% \text{ train}, \qquad 10\% \text{ validation}, \qquad 70\% \text{ test}.
+\]
+Because the split is assigned at the event level, all triplets from the same event remain in the same partition, preventing leakage across datasets.
+
+This stage also implements a hybrid treatment of class imbalance. The repository documentation notes that true triplets are rare compared with combinatorial backgrounds. To manage this, the code caps the number of background triplets per event in the train and validation splits while leaving the test split untouched. The default background cap is 200 triplets per event. The kept background rows are chosen deterministically using a stable hash of the event and candidate indices, so rerunning with the same seed preserves the same retained subset.
+
+In addition to writing \texttt{train.parquet}, \texttt{val.parquet}, and \texttt{test.parquet}, the stage writes both machine-readable and human-readable summaries of the split composition. The resulting reports include the number of events per split, the number of truth and background triplets, the number removed by balancing, and average triplets per event.
+
+\subsection{Stage 3: Model Training}
+
+Conceptually, the third stage asks the model to discover which internal triplet patterns are characteristic of real top decays. The classifier is therefore not learning event identity; it is learning a discriminant over candidate triplets.
+
+Technically, the training stage, implemented in \texttt{train.py}, supports two backends: XGBoost and TabPFN. In both cases, the training code loads exactly the six engineered feature columns together with the truth label. The current code computes internal summary metrics such as binary AUC and validation log loss, saves the trained model, and writes a training report and a short Markdown statistics summary.
+
+For XGBoost, the repository exposes explicit hyperparameters through the command-line interface. The defaults in the current code are
+\begin{itemize}[leftmargin=*]
+  \item \texttt{num\_boost\_round} = 400,
+  \item \texttt{early\_stopping\_rounds} = 30,
+  \item learning rate \texttt{eta} = 0.05,
+  \item \texttt{max\_depth} = 6,
+  \item \texttt{min\_child\_weight} = 1.0,
+  \item \texttt{subsample} = 0.8,
+  \item \texttt{colsample\_bytree} = 0.8,
+  \item and \texttt{tree\_method} = \texttt{hist}.
+\end{itemize}
+An optional \texttt{--use-sample-weights} switch applies class-imbalance weighting by upweighting the positive class according to the train and validation class counts.
+
+For TabPFN, the code supports a separate path in which the training sample can be explicitly subsampled and class-balanced to a $50/50$ signal-background mixture. This is controlled by \texttt{--max-training-samples} and \texttt{--tabpfn-balance-classes}. The resulting report captures not only metrics but also the sampling strategy that was used to form the final training subset.
+
+\subsection{Stage 4: Inference on All Candidate Triplets}
+
+Conceptually, the fourth stage turns learned knowledge into a ranking over all candidate top interpretations. Instead of collapsing the event immediately to one answer, it first scores the entire candidate population.
+
+Technically, the \texttt{infer.py} stage loads a trained model, reads the test Parquet file in batches, reconstructs the feature matrix, and appends a score column to each row before writing the scored dataset back to Parquet. The row count is checked at the end to ensure that the number of input triplets matches the number of output scores.
+
+This design has an important consequence for later analysis. The stage does not discard low-score triplets or attempt immediate event-level reconstruction. Instead, it preserves the full candidate set. This makes the scored Parquet file a reusable intermediate product: different score thresholds, different event-level selection strategies, and different plotting studies can all be applied downstream without rerunning inference.
+
+The plotting code connected to the inference stage generates ROC curves, score distributions, threshold scans, and, when applicable, score-versus-mass views. Comparison plots between XGBoost and TabPFN are also supported when both scored outputs are present.
+
+\subsection{Stage 5: Turning Scores into Event-Level Top Candidates}
+
+Conceptually, the fifth stage closes the loop back to the physics object one actually wants: a small number of top candidates per event. At this point the score is no longer just a diagnostic quantity; it becomes the basis for reconstruction decisions.
+
+Technically, the packaged repository under \texttt{clean\_repo/src/triplet\_ml} adds a fifth stage, \texttt{select\_triplets.py}, which makes the role of the classifier especially clear. At this stage, the triplet score is no longer an end in itself; it becomes a ranking variable used to build event-level top-candidate outputs.
+
+The code supports multiple strategies:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{greedy\_disjoint},
+  \item \texttt{top1},
+  \item \texttt{topk},
+  \item \texttt{threshold},
+  \item and \texttt{best\_pair\_avg\_disjoint}.
+\end{itemize}
+
+The stage writes two Parquet outputs. The first, \texttt{selected\_triplets.parquet}, stores the selected candidates themselves together with their rank and score. The second, \texttt{event\_selection.parquet}, stores event-level summaries such as the number of selected top candidates, fixed top-candidate slots \texttt{top1\_*} through \texttt{top4\_*}, and the invariant mass of the two leading selected candidates. In the pair-based strategy, the code explicitly requires enough inferred jets to define two disjoint candidates and leaves dummy values when no acceptable pair is available.
+
+This stage explains how the machine-learning outputs are used in practice. The classifier does not itself reconstruct a final top object; it produces a scoring function. Event-level top reconstruction is then recovered by applying a strategy that translates scored triplets into a small number of candidate tops per event.
+
+\end{document}

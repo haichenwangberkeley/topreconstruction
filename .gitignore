@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+.env
+
+# Data artifacts
+*.root
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.npy
+*.npz
+
+# Model artifacts
+*.pt
+*.pth
+*.onnx
+*.pkl
+model_*.json
+
+# Generated reports/metrics
+config_snapshot.json
+*training_report*.json
+*inference_report*.json
+*dataset_*_report.json
+*plot_metrics*.json
+*statistics*.json
+
+# Logs and temp
+*.log
+logs/
+log/
+output/
+outputs/
+tmp/
+temp/
+cache/
+
+# Plot outputs and generated web pages
+plots/
+triplet_plots/
+triplet_validation_plots/
+cutflow_output/
+artifacts/
+*.png
+*.pdf
+*.svg
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Nested git metadata backup
+top_reco/.git_nested_backup/
+
+# System files
+.DS_Store
+
+# Archives
+*.tar.gz
+*.tgz

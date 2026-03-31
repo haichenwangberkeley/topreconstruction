@@ -1,0 +1,11 @@
+name: strategy_compare
+summary: Compare all implemented selection strategies on an existing inference sample.
+steps:
+  - run: make compare_strategies MAX_EVENTS=${MAX_EVENTS} PYTHON=${PYTHON} SELECT_MIN_SCORE=${SELECT_MIN_SCORE} SELECT_MAX_TOP=${SELECT_MAX_TOP}
+  - run: make manifest MAX_EVENTS=${MAX_EVENTS} PYTHON=${PYTHON} SELECT_STRATEGY=${SELECT_STRATEGY} SELECT_MIN_SCORE=${SELECT_MIN_SCORE} SELECT_MAX_TOP=${SELECT_MAX_TOP}
+defaults:
+  MAX_EVENTS: 40000
+  PYTHON: .venv/bin/python
+  SELECT_STRATEGY: greedy_disjoint
+  SELECT_MIN_SCORE: 0.5
+  SELECT_MAX_TOP: 4

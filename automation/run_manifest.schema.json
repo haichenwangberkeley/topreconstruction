@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Top Monorepo Run Manifest",
+  "type": "object",
+  "required": [
+    "schema",
+    "timestamp",
+    "pipeline",
+    "parameters",
+    "stages",
+    "status"
+  ],
+  "properties": {
+    "schema": {
+      "const": "top-monorepo/run-manifest/v1"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "pipeline": {
+      "type": "string"
+    },
+    "parameters": {
+      "type": "object",
+      "required": ["root_input", "max_events", "seed"],
+      "properties": {
+        "root_input": {
+          "type": "string"
+        },
+        "max_events": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "selection": {
+          "type": "object",
+          "required": ["strategy", "min_score", "max_top_per_event"],
+          "properties": {
+            "strategy": {
+              "type": "string"
+            },
+            "min_score": {
+              "type": "number"
+            },
+            "max_top_per_event": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "stages": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["incomplete", "complete", "failed"]
+    }
+  },
+  "additionalProperties": true
+}

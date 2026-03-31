@@ -1,0 +1,15 @@
+\begin{itemize}
+  \item \texttt{greedy\_disjoint}: This strategy tries to build the event from the strongest available candidates while forbidding jet reuse. After applying the common score cut and sorting candidates by score, it takes the best surviving triplet, removes its jets from further consideration, and then repeats the procedure on the remaining candidates. It is therefore a sequential, non-overlapping reconstruction rule. This is useful when one wants a tidy event interpretation in which selected top candidates correspond to distinct jet subsets.
+
+  \item \texttt{top1}: This is the simplest and most conservative strategy. After the common score filtering and ranking step, it keeps only the highest-scoring surviving triplet. In effect, the event is summarized by a single best top hypothesis. This strategy is useful when the analysis wants one representative reconstructed top candidate per event and does not need subleading alternatives.
+
+  \item \texttt{topk}: This strategy keeps the leading part of the ranked candidate list. After score filtering and sorting, it returns the first
+  \[
+  \min(\texttt{max\_top\_per\_event},\ \texttt{top\_k})
+  \]
+  candidates. Unlike \texttt{greedy\_disjoint}, it does not require the selected triplets to be disjoint in jets. It is therefore a pure ranking-based truncation of the candidate list, useful when one wants several leading hypotheses per event for further study.
+
+  \item \texttt{threshold}: This strategy keeps all candidates that survive the score requirement, up to the event-level cap. Since the common preprocessing already removes all candidates below \texttt{min\_score}, the strategy effectively returns the first \texttt{max\_top\_per\_event} candidates from the filtered and sorted list. Conceptually, the selection multiplicity is controlled by the score cut rather than by a fixed target number of retained candidates. Like \texttt{topk}, it does not enforce disjointness.
+
+  \item \texttt{best\_pair\_avg\_disjoint}: This is the most topology-driven strategy. Instead of selecting individual candidates one by one, it searches for two non-overlapping triplets that together define the best two-top interpretation of the event. In the implementation, the event must have at least six inferred jets, and the strategy examines all disjoint candidate pairs that survive the score cut. It then chooses the pair with the largest average score. If no valid disjoint pair exists, the event receives no selected pair. This strategy is useful when the reconstruction target is explicitly a two-top configuration rather than a single best triplet.
+\end{itemize}

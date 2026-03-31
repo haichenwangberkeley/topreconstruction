@@ -1,0 +1,137 @@
+\documentclass{beamer}
+\usetheme{Madrid}
+\usecolortheme{whale}
+
+\title{Top Quark Reconstruction with Machine Learning}
+\subtitle{Revisiting Combinatorial Object Selection in ATLAS}
+\author{GitHub Copilot}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Table of Contents}
+  \tableofcontents
+\end{frame}
+
+\section{Concept}
+\begin{frame}{The Problem: Top Quark Reconstruction}
+  \begin{itemize}
+    \item \textbf{Physics Process:} $t \to Wb \to q q' b$
+    \item \textbf{The Challenge:} In realistic LHC events, we often have $N > 3$ jets due to radiation, pileup, and underlying events.
+    \item \textbf{Combinatorics:} For $N$ jets, there are $\binom{N}{3}$ possible triplets.
+    \item \textbf{Goal:} Identify the single triplet that corresponds to the true top decay among all candidates.
+  \end{itemize}
+  \vfill
+  \centering
+  \textit{Reconstruction = Structured Classification over Candidate Subsets}
+\end{frame}
+
+\begin{frame}{Feature Engineering}
+  We use physics-motivated observables to distinguish signal from background:
+  \begin{itemize}
+    \item \textbf{Angular Geometry:} Three pairwise angular separations:
+      \[ \Delta R_{ij} = \sqrt{(\eta_i - \eta_j)^2 + (\phi_i - \phi_j)^2} \]
+    \item \textbf{Mass Structure:} Three pairwise invariant masses normalized to the total triplet mass:
+      \[ \frac{m_{ij}}{m_{\text{triplet}}} \]
+  \end{itemize}
+  \vfill
+  These six variables capture the internal kinematics of the decay while remaining robust and interpretable.
+\end{frame}
+
+\section{Implementation}
+\begin{frame}{Package Architecture}
+  The repository is structured as a modular ML pipeline (Source: \texttt{clean\_repo/docs/schema.md}):
+  \begin{enumerate}
+    \item \textbf{Stage 1: Dataset Build (\texttt{dataset\_build.py})}
+      \begin{itemize}
+        \item Processes ROOT ntuples.
+        \item Labels triplets as truth or non-truth.
+        \item Outputs \texttt{triplets\_raw.parquet}.
+      \end{itemize}
+    \item \textbf{Stage 2: Dataset Prepare (\texttt{dataset\_prepare.py})}
+      \itemize{
+        \item Splits data into Train, Val, and Test sets.
+        \item Handles class balancing.
+      }
+    \item \textbf{Stage 3: Training (\texttt{train.py})}
+      \itemize{
+        \item Supports XGBoost (BDT) and TabPFN.
+        \item Saves model artifacts and training reports.
+      }
+    \item \textbf{Stage 4: Inference (\texttt{infer.py})}
+      \itemize{
+        \item Evaluates model on test data.
+        \item Ranks candidate triplets per event.
+      }
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Key Dependencies}
+  The implementation relies on modern data science libraries:
+  \begin{itemize}
+    \item \texttt{uproot} / \texttt{awkward}: For efficient ROOT file reading and vectorized jet manipulations.
+    \item \texttt{pandas} / \texttt{pyarrow}: For triplet storage and Parquet management.
+    \item \texttt{xgboost}: For the gradient boosted tree classifier.
+    \item \texttt{matplotlib} / \texttt{plotly}: For automated diagnostic and performance plotting.
+  \item \texttt{TabPFN}: For prior-data fitted network classification (optional).
+  \end{itemize}
+\end{frame}
+
+\section{Operation}
+\begin{frame}[fragile]{Standard Workflow (Makefile)}
+  The recommended operation uses a \texttt{Makefile} for reproducibility:
+  \begin{block}{Running the Pipeline}
+\begin{verbatim}
+# Set environment variables
+export ROOT_INPUT=data/input.root
+
+# Run the full XGBoost pipeline
+make pipeline_xgb ROOT_INPUT=$ROOT_INPUT MAX_EVENTS=40000
+
+# Run the TabPFN pipeline
+make pipeline_tabpfn ROOT_INPUT=$ROOT_INPUT MAX_EVENTS=40000
+\end{verbatim}
+  \end{block}
+  Outputs are organized under \texttt{artifacts/run\_\{N\}/}.
+\end{frame}
+
+\begin{frame}[fragile]{Direct CLI Interface}
+  Individual stages can be run using the \texttt{triplet\_ml} module:
+\begin{verbatim}
+# Stage 1: Build
+python -m triplet_ml dataset_build --inputs $ROOT_INPUT
+
+# Stage 3: Train
+python -m triplet_ml train \
+    --model xgb \
+    --xgb-config configs/xgb_hyperparameters.json \
+    --train artifacts/train.parquet \
+    --val artifacts/val.parquet
+\end{verbatim}
+\end{frame}
+
+\begin{frame}{Monitoring and Visualization}
+  The package automatically generates evaluation plots:
+  \itemize{
+    \item \textbf{Training logs:} ROC curves, loss over epochs, and feature importance.
+    \item \textbf{Inference diagnostics:} Classification scores and invariant mass distributions of selected triplets.
+    \item \textbf{Deployment:} Built-in support for deploying plots to public CFS directories via \texttt{--deploy}.
+  }
+\end{frame}
+
+\begin{frame}{Summary}
+  \begin{itemize}
+    \item \textbf{Concept:} Frame top reconstruction as a supervised classification problem over triplets.
+    \item \textbf{Implementation:} Modular, end-to-end Python pipeline using ROOT, Parquet, and XGBoost.
+    \item \textbf{Operation:} Reproducible via \texttt{Makefile} or explicit CLI commands with structured artifact management.
+  \end{itemize}
+  \vfill
+  \centering
+  \Large \textbf{Questions?}
+\end{frame}
+
+\end{document}

@@ -1,0 +1,55 @@
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/roc_test.png}
+  \caption{Receiver-operating-characteristic curve for the XGBoost triplet-classification output in the last-10k inference run. The curve shows how the score trades truth-triplet efficiency against combinatorial-background acceptance as the threshold is scanned. According to the corresponding metrics file, this sample contains 104{,}892 triplets in total, including 4{,}381 truth rows and 100{,}511 background rows, and the resulting test-area-under-curve is \texttt{auc\_test = 0.8304}. This figure summarizes the overall ranking power of the triplet score before any event-level top-candidate selection is applied.}
+  \label{fig:triplet-roc}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/score_distribution_test.png}
+  \caption{Score distribution for truth-matched and fake triplets in the same last-10k XGBoost inference run. The figure shows that truth triplets tend to populate larger scores than background triplets, while still exhibiting some overlap with the combinatorial population. The associated metrics report mean scores of about 0.609 for truth and 0.270 for background. This plot is useful because it shows how the classifier separation seen in the ROC curve is realized directly in the score variable that is later used for selection.}
+  \label{fig:triplet-score-dist}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/score_vs_m123.png}
+  \caption{Classifier score as a function of the triplet invariant mass \texttt{m123} for the last-10k inference sample. This plot shows how the learned triplet discriminant is distributed across the physically relevant three-jet mass observable, and therefore indicates whether high-score candidates occupy a distinctive kinematic region. It is useful because it connects the machine-learning score back to a directly interpretable reconstruction observable.}
+  \label{fig:score-vs-m123}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/m123_distribution_score_gt_0p5_truth_vs_fake.png}
+  \caption{Triplet invariant-mass distribution after requiring \texttt{score > 0.5} in the 10k-event study run. The corresponding metrics report 18{,}249 selected triplets, of which 2{,}236 are truth and 16{,}013 are fake, with mean \texttt{m123} values of about 161.5~GeV for truth and 176.6~GeV for fake. This plot is useful because it shows how the surviving high-score triplets populate the reconstructed three-jet mass and how the truth and fake populations differ after a concrete reconstruction-quality cut.}
+  \label{fig:m123-score-cut}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/n_top_selected.png}
+  \caption{Number of selected top candidates per event for the \texttt{greedy\_disjoint} strategy in the last-10k study. The selection report states that 6{,}361 of 8{,}717 events contain at least one selected candidate, with an average of about 0.85 selected tops per event and 7{,}414 selected triplets in total. This figure is useful because it shows how the triplet-level score is converted into an event-level multiplicity distribution once disjointness and a score threshold are imposed.}
+  \label{fig:n-top-selected-greedy}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/top_mass_by_rank.png}
+  \caption{Mass distributions of selected candidates by rank for the \texttt{greedy\_disjoint} strategy. The accompanying selection metrics show that the sample is dominated by the leading candidate, with 6{,}348 entries for \texttt{top1}, 1{,}024 for \texttt{top2}, 24 for \texttt{top3}, and essentially none for \texttt{top4}. This figure is useful because it shows how the selected top-candidate population changes from the leading reconstructed object to progressively rarer subleading candidates.}
+  \label{fig:top-mass-by-rank-greedy}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/n_top_selected_best_pair_avg_disjoint.png}
+  \caption{Selected-top multiplicity for the \texttt{best\_pair\_avg\_disjoint} strategy in the last-10k study. The selection report records 2{,}277 events with at least six inferred jets but only 1{,}416 events with an accepted selected pair, corresponding to 2{,}832 selected triplets in total. This figure is useful because it illustrates how much more restrictive the pair-based strategy is compared with a greedy sequential selection, and how often the event supports a viable two-top interpretation.}
+  \label{fig:n-top-selected-pair}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figures/m_top1_top2_best_pair_avg_disjoint.png}
+  \caption{Invariant-mass distribution of the leading selected top pair for the \texttt{best\_pair\_avg\_disjoint} strategy. This figure shows the event-level kinematic quantity \texttt{m(top1,top2)} after requiring a valid disjoint pair of triplets whose average score is maximal. It is useful because it represents the final two-top event interpretation produced by the pair-selection stage rather than the properties of individual triplet hypotheses.}
+  \label{fig:m-top1-top2-pair}
+\end{figure}
