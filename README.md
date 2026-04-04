@@ -29,6 +29,9 @@ Install the canonical package from monorepo root:
 .venv/bin/pip install -e top_reco
 ```
 
+Input data artifacts for this project can be found at:
+- `https://portal.nersc.gov/cfs/atlas/haichenwang/artifacts/`
+
 Run a full reconstruction chain (build -> prepare -> train -> infer):
 
 ```bash
